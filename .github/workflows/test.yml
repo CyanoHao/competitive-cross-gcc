@@ -1,0 +1,45 @@
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ConorMacBride/install-package@v1
+        with:
+          apt: libarchive-tools qemu-user qemu-user-binfmt wine wine64-tools
+
+      # apt install wine-binfmt seems not work
+      - name: Register wine binfmt
+        run: |
+          echo ':DOSWin:M::MZ::/usr/bin/wine:' | sudo tee /proc/sys/fs/binfmt_misc/register
+
+      - name: Download busybox
+        run: |
+          wget https://www.busybox.net/downloads/binaries/1.16.1/busybox-armv6l
+          chmod +x busybox-armv6l
+
+      - name: Run busybox
+        run: |
+          ./busybox-armv6l
+
+      - name: Download xmake
+        run: |
+          wget https://github.com/xmake-io/xmake/releases/download/v2.9.8/xmake-v2.9.8.win64.zip
+          bsdtar -xf xmake-v2.9.8.win64.zip
+          chmod +x xmake/xmake.exe
+
+      - name: Run xmake (wine)
+        run: |
+          wine xmake/xmake.exe --help
+
+      - name: Run xmake (binfmt)
+        run: |
+          ls /proc/sys/fs/binfmt_misc/
+          cat /proc/sys/fs/binfmt_misc/DOSWin
+          ./xmake/xmake.exe --help
