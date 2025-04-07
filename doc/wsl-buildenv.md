@@ -24,17 +24,22 @@ The build script requires root privileges, so AN EXCLUSIVE DISTRO is highly reco
    apk update
    apk add \
      autoconf automake bison build-base flex libtool rsync texinfo xmake \
-     7zip ca-certificates curl file gawk libarchive-tools py3-packaging python3 zstd
+     7zip ca-certificates curl file gawk grep libarchive-tools py3-packaging python3 zstd
+   ```
+3. Set environment variables:
+   ```bash
+   echo "export XMAKE_ROOT=y" >>~/.bashrc
+   echo "export LD_PRELOAD=/usr/lib/libmimalloc.so.2" >>~/.bashrc
    ```
 
 ## Clone the Repository
 
 Cloning to Windows filesystem is recommended. For example with Windows Git Bash:
 ```bash
-git clone https://github.com/redpanda-cpp/competitive-cross-gcc.git /d/competitive-cross-gcc --config=core.autocrlf=false
+git clone https://github.com/redpanda-cpp/competitive-cross-gcc.git /d/competitive-cross-gcc --config=core.autocrlf=false --config core.symlinks=true
 ```
 
-Auto-converting line endings must be disabled. To disable in an existing repo, run:
+`core.autocrlf` must be disabled, and `core.symlinks` must be enabled. To convert an existing repo, run:
 ```bash
 # save workspace
 git add *
@@ -42,6 +47,7 @@ git stash
 
 # do convertion
 git config core.autocrlf false
+git config core.symlinks true
 git reset --hard
 
 # restore workspace

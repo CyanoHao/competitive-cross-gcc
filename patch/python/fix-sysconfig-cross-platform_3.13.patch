@@ -1,0 +1,17 @@
+diff --git a/Lib/sysconfig/__init__.py b/Lib/sysconfig/__init__.py
+index 298256a5b23..fff24c418d7 100644
+--- a/Lib/sysconfig/__init__.py
++++ b/Lib/sysconfig/__init__.py
+@@ -728,11 +728,7 @@ def get_platform():
+         return aix_platform()
+     elif osname[:6] == "cygwin":
+         osname = "cygwin"
+-        import re
+-        rel_re = re.compile(r'[\d.]+')
+-        m = rel_re.match(release)
+-        if m:
+-            release = m.group()
++        return f"{osname}-{machine}"
+     elif osname[:6] == "darwin":
+         if sys.platform == "ios":
+             release = get_config_vars().get("IPHONEOS_DEPLOYMENT_TARGET", "13.0")
