@@ -54,6 +54,9 @@ def _binutils(ver: BranchProfile, paths: ProjectPaths):
       else:
         patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.26.patch')
 
+    # Don't optimize out libtool wrapper magic
+    patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'dont-optimize-out-libtool-wrapper-magic.patch')
+
     # Always enable sysroot
     if v < Version('2.26'):
       patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'always-enable-sysroot.patch')

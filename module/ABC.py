@@ -34,7 +34,7 @@ def _binutils(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argpar
       '--disable-install-libbfd',
       '--disable-multilib',
       '--disable-nls',
-      *cflags_M(lto = False),
+      *cflags_M(lto = True),
       'AR=x86_64-w64-mingw32-gcc-ar',
       'RANLIB=x86_64-w64-mingw32-gcc-ranlib',
     ])
@@ -212,7 +212,7 @@ def _gcc(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argparse.Na
       # packages
       '--without-libcc1',
       *config_flags,
-      *cflags_M(lto = False),
+      *cflags_M(lto = True),
       *cflags_G('_FOR_TARGET'),
     ])
     make_default(build_dir, config.jobs)
