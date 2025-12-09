@@ -67,3 +67,14 @@ def check_and_extract(path: Path, arx: Path):
     raise Exception(message)
 
   return True
+
+def patch(path: Path, patch: Path):
+  subprocess.run(
+    ['patch', '-Np1', '-i', patch],
+    cwd = path,
+    check = True,
+  )
+
+def patch_done(path: Path):
+  mark = path / '.patched'
+  mark.touch()

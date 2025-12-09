@@ -5,4 +5,9 @@ RUN apk update && \
       # build tools
       autoconf automake bison build-base flex libtool rsync texinfo xmake \
       # general tools
-      7zip ca-certificates curl file gawk libarchive-tools py3-packaging python3 zstd
+      7zip ca-certificates curl file gawk grep libarchive-tools py3-packaging python3 zstd \
+      # special
+      mimalloc2
+
+ENV XMAKE_ROOT=y
+ENV LD_PRELOAD=/usr/lib/libmimalloc.so.2

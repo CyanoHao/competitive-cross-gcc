@@ -39,7 +39,7 @@ jobs:
         if: github.ref_type != 'tag' || startsWith(github.ref_name, matrix.branch)
         run: |
           podman build -t competitive-cross-gcc/buildenv support/buildenv
-          podman run --rm -v $PWD:/mnt -w /mnt competitive-cross-gcc/buildenv \
+          podman run --rm --cap-add=sys_admin -v $PWD:/mnt -w /mnt competitive-cross-gcc/buildenv \
             ./main.py --branch ${{ matrix.branch }}
 
       - name: Upload
