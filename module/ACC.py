@@ -19,6 +19,14 @@ def _gdbserver(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argpa
 
   destdir = layer_ACC.gdb / f'{arch}-linux-gnu'
 
+  ld_extra = []
+
+  if v_gcc.major >= 8:
+    ld_extra.append('-static-pie')
+  else:
+    # libtool eats `-static`
+    ld_extra.append('--static')
+
   with overlayfs_ro('/usr/local', [
     layer_AAC.binutils / 'usr/local',
     layer_AAC.gcc / 'usr/local',
@@ -44,8 +52,7 @@ def _gdbserver(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argpa
       '--disable-werror',
       # packages
       '--with-gdbserver',
-      # libtool eats `-static`
-      *cflags_G(ld_extra = ['--static']),
+      *cflags_G(ld_extra = ld_extra),
     ])
 
     if v.major >= 10:
