@@ -11,14 +11,18 @@ Cross GCC on Windows for Linux.
    For Windows host, [create an exclusive WSL distro for competitive-cross-gcc](doc/wsl-buildenv.md).
 2. Launch build environment. Linux:
    ```bash
-   podman run -it --rm -v $PWD:/mnt -w /mnt competitive-cross-gcc/buildenv
+   podman run -it --rm \
+     --cap-add=sys_admin \
+     -v $PWD:/mnt -w /mnt \
+     competitive-cross-gcc/buildenv
    ```
    To expose build directories for debugging:
    ```bash
    podman run -it --rm \
+     --cap-add=sys_admin \
      -v $PWD:/mnt -w /mnt \
      -v $PWD/build:/tmp/build \
-     -v $PWD/pkg:/opt \
+     -v $PWD/layer:/tmp/layer \
      competitive-cross-gcc/buildenv
    ```
    Windows: in “Terminal”, select “competitive-cross-gcc-buildenv” from the dropdown list.

@@ -2,94 +2,73 @@ import argparse
 import os
 import shutil
 from packaging.version import Version
+import subprocess
 
 from module.debug import shell_here
 from module.path import ProjectPaths
 from module.profile import BranchProfile
-from module.util import cflags_A, cflags_C, configure, ensure, make_custom, make_default, make_destdir_install, make_install
-
-def _gmake(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  v = Version(ver.make)
-  v_gcc = Version(ver.gcc)
-  build_dir = paths.make / 'build-AAA'
-  ensure(build_dir)
-
-  c_extra = []
-
-  # GCC 15 defaults to C23, in which `foo()` means `foo(void)` instead of `foo(...)`.
-  if v_gcc.major >= 15 and v < Version('4.5'):
-    c_extra.append('-std=gnu11')
-
-  configure('make', build_dir, [
-    '--prefix=',
-    f'--build={config.build}',
-    '--disable-nls',
-    *cflags_A(c_extra = c_extra, ld_extra = ['-static']),
-  ])
-  make_default('make', build_dir, config.jobs)
-  make_destdir_install('make', build_dir, paths.x_prefix)
-
-def build_AAA_make(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  _gmake(ver, paths, config)
+from module.util import overlayfs_ro
+from module.util import cflags_L, configure, ensure, make_default, make_destdir_install
 
 def _gmp(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  build_dir = paths.gmp / 'build-AAA'
+  build_dir = paths.src_dir.gmp / 'build-AAA'
   ensure(build_dir)
-  configure('gmp', build_dir, [
-    f'--prefix={paths.x_dep}',
+  configure(build_dir, [
+    '--prefix=/usr/local',
     f'--host={config.build}',
     f'--build={config.build}',
     '--disable-assembly',
     '--enable-static',
     '--disable-shared',
-    *cflags_A(),
+    *cflags_L(),
   ])
-  make_default('gmp', build_dir, config.jobs)
-  make_install('gmp', build_dir)
+  make_default(build_dir, config.jobs)
+  make_destdir_install(build_dir, paths.layer_AAA.gmp)
 
 def _mpfr(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  build_dir = paths.mpfr / 'build-AAA'
-  ensure(build_dir)
-  configure('mpfr', build_dir, [
-    f'--prefix={paths.x_dep}',
-    f'--host={config.build}',
-    f'--build={config.build}',
-    '--enable-static',
-    '--disable-shared',
-    *cflags_A(
-      common_extra = [f'-I{paths.x_dep}/include'],
-      ld_extra = [f'-L{paths.x_dep}/lib'],
-    ),
-  ])
-  make_default('mpfr', build_dir, config.jobs)
-  make_install('mpfr', build_dir)
+  with overlayfs_ro('/usr/local', [
+    paths.layer_AAA.gmp / 'usr/local',
+  ]):
+    build_dir = paths.src_dir.mpfr / 'build-AAA'
+    ensure(build_dir)
+    configure(build_dir, [
+      '--prefix=/usr/local',
+      f'--host={config.build}',
+      f'--build={config.build}',
+      '--enable-static',
+      '--disable-shared',
+      *cflags_L(),
+    ])
+    make_default(build_dir, config.jobs)
+    make_destdir_install(build_dir, paths.layer_AAA.mpfr)
 
 def _mpc(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  build_dir = paths.mpc / 'build-AAA'
-  ensure(build_dir)
-  configure('mpc', build_dir, [
-    f'--prefix={paths.x_dep}',
-    f'--host={config.build}',
-    f'--build={config.build}',
-    '--enable-static',
-    '--disable-shared',
-    *cflags_A(
-      common_extra = [f'-I{paths.x_dep}/include'],
-      ld_extra = [f'-L{paths.x_dep}/lib'],
-    ),
-  ])
-  make_default('mpc', build_dir, config.jobs)
-  make_install('mpc', build_dir)
+  with overlayfs_ro('/usr/local', [
+    paths.layer_AAA.gmp / 'usr/local',
+    paths.layer_AAA.mpfr / 'usr/local',
+  ]):
+    build_dir = paths.src_dir.mpc / 'build-AAA'
+    ensure(build_dir)
+    configure(build_dir, [
+      '--prefix=/usr/local',
+      f'--host={config.build}',
+      f'--build={config.build}',
+      '--enable-static',
+      '--disable-shared',
+      *cflags_L(),
+    ])
+    make_default(build_dir, config.jobs)
+    make_destdir_install(build_dir, paths.layer_AAA.mpc)
 
-def _python_z(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  build_dir = paths.python_z / 'build-AAA'
+def _z(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
+  build_dir = paths.src_dir.z / 'build-AAA'
   ensure(build_dir)
-  configure('zlib for python', build_dir, [
-    '--prefix=',
+  configure(build_dir, [
+    '--prefix=/usr/local',
     '--static',
   ])
-  make_default('zlib for python', build_dir, config.jobs)
-  make_destdir_install('zlib for python', build_dir, paths.x_dep)
+  make_default(build_dir, config.jobs)
+  make_destdir_install(build_dir, paths.layer_AAA.z)
 
 def build_AAA_library(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
   _gmp(ver.gmp, paths, config)
@@ -98,28 +77,61 @@ def build_AAA_library(ver: BranchProfile, paths: ProjectPaths, config: argparse.
 
   _mpc(ver.mpc, paths, config)
 
-  if ver.python:
-    _python_z(ver, paths, config)
+  _z(ver, paths, config)
+
+def _gmake(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
+  v = Version(ver.make)
+  v_gcc = Version(ver.gcc)
+  build_dir = paths.src_dir.make / 'build-AAA'
+  ensure(build_dir)
+
+  c_extra = []
+
+  # GCC 15 defaults to C23, in which `foo()` means `foo(void)` instead of `foo(...)`.
+  if v_gcc.major >= 15 and v < Version('4.5'):
+    c_extra.append('-std=gnu11')
+
+  configure(build_dir, [
+    '--prefix=/usr/local',
+    f'--build={config.build}',
+    '--disable-nls',
+    *cflags_L(c_extra = c_extra),
+  ])
+  make_default(build_dir, config.jobs)
+  make_destdir_install(build_dir, paths.layer_AAA.make)
 
 def _python(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  build_dir = paths.python / 'build-AAA'
-  ensure(build_dir)
-  configure('python', build_dir, [
-    f'--prefix={paths.x_prefix}',
-    # static
-    '--disable-shared',
-    'MODULE_BUILDTYPE=static',
-    # features
-    '--disable-test-modules',
-    # packages
-    '--without-static-libpython',
-    f'ZLIB_CFLAGS=-I{paths.x_dep}/include',
-    f'ZLIB_LIBS=-L{paths.x_dep}/lib -lz',
-    *cflags_A(ld_extra = ['-static']),
-  ])
-  make_custom('python', build_dir, ['LDFLAGS=-static', 'LINKFORSHARED= '], config.jobs)
-  make_install('python', build_dir)
+  with overlayfs_ro('/usr/local', [
+    paths.layer_AAA.z / 'usr/local',
+  ]):
+    build_dir = paths.src_dir.python / 'build-AAA'
+    ensure(build_dir)
+    configure(build_dir, [
+      f'--prefix=/usr/local',
+      # static
+      '--disable-shared',
+      'MODULE_BUILDTYPE=static',
+      # features
+      '--disable-test-modules',
+      # packages
+      '--without-static-libpython',
+      *cflags_L(),
+    ])
+    make_default(build_dir, config.jobs)
+    make_destdir_install(build_dir, paths.layer_AAA.python)
 
-def build_AAA_python(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
+def _xmake(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
+  subprocess.run([
+    './configure',
+    '--prefix=/usr/local',
+  ], cwd = paths.src_dir.xmake, check = True)
+  make_default(paths.src_dir.xmake, config.jobs)
+  make_destdir_install(paths.src_dir.xmake, paths.layer_AAA.xmake)
+
+def build_AAA_tool(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
+  _gmake(ver, paths, config)
+
   if ver.python:
     _python(ver, paths, config)
+
+  _xmake(ver, paths, config)

@@ -8,42 +8,83 @@ from pathlib import Path
 import shutil
 import subprocess
 from subprocess import PIPE, Popen
+from tempfile import NamedTemporaryFile
 
 from module.args import parse_args
 from module.path import ProjectPaths
 from module.prepare_source import prepare_source
 from module.profile import BRANCHES
+from module.util import ensure, overlayfs_ro
 
 # A = x86_64-linux-musl
 # B = x86_64-w64-mingw32
 # C = {aarch64,x86_64}-linux-gnu
 # XYZ: build = X, host = Y, target = Z
-from module.AAA import build_AAA_make, build_AAA_library, build_AAA_python
+from module.AAA import build_AAA_library, build_AAA_tool
 from module.AAB import build_AAB_compiler, build_AAB_library
+from module.ABB import build_ABB_tool
 from module.AAC import build_AAC_compiler, build_AAC_library
-from module.ABC import build_ABC_toolchain, create_ABC_alias
-from module.ACC import build_ACC_gdbserver
+from module.ABC import build_ABC_toolchain
+from module.ACC import build_ACC_tool
 
 def clean(config: argparse.Namespace, paths: ProjectPaths):
-  if paths.build.exists():
-    shutil.rmtree(paths.build)
-  if not config.no_cross and paths.x_prefix.exists():
-    shutil.rmtree(paths.x_prefix)
-  if paths.linux_prefix('x86_64').exists():
-    shutil.rmtree(paths.linux_prefix('x86_64'))
-  if paths.linux_prefix('aarch64').exists():
-    shutil.rmtree(paths.linux_prefix('aarch64'))
+  if paths.build_dir.exists():
+    shutil.rmtree(paths.build_dir)
+  if not config.no_cross:
+    if paths.layer_AAA.prefix.exists():
+      shutil.rmtree(paths.layer_AAA.prefix)
+    if paths.layer_AAB.prefix.exists():
+      shutil.rmtree(paths.layer_AAB.prefix)
+    if paths.layer_AAC('x86_64').prefix.exists():
+      shutil.rmtree(paths.layer_AAC('x86_64').prefix)
+    if paths.layer_AAC('aarch64').prefix.exists():
+      shutil.rmtree(paths.layer_AAC('aarch64').prefix)
+  if paths.layer_ABC('x86_64').prefix.exists():
+    shutil.rmtree(paths.layer_ABC('x86_64').prefix)
+  if paths.layer_ACC('x86_64').prefix.exists():
+    shutil.rmtree(paths.layer_ACC('x86_64').prefix)
+  if paths.layer_ABC('aarch64').prefix.exists():
+    shutil.rmtree(paths.layer_ABC('aarch64').prefix)
+  if paths.layer_ACC('aarch64').prefix.exists():
+    shutil.rmtree(paths.layer_ACC('aarch64').prefix)
 
 def prepare_dirs(paths: ProjectPaths):
-  paths.assets.mkdir(parents = True, exist_ok = True)
-  paths.build.mkdir(parents = True, exist_ok = True)
-  paths.dist.mkdir(parents = True, exist_ok = True)
+  paths.assets_dir.mkdir(parents = True, exist_ok = True)
+  paths.build_dir.mkdir(parents = True, exist_ok = True)
+  paths.dist_dir.mkdir(parents = True, exist_ok = True)
 
-def _package(root: Path | str, src: Path | str, dst: Path):
-  tar = Popen(['bsdtar', '-C', root, '-c', src], stdout = PIPE)
+def _sort_tarball(root: Path, src: Path):
+  files: map[str, list[str]] = {}
+  for file in src.glob('**/*'):
+    if not file.is_dir():
+      dn = file.relative_to(root).parent
+      fn = file.name
+      if dn not in files:
+        files[dn] = []
+      files[dn].append(fn)
+
+  result = []
+  for dn in sorted(files.keys()):
+    result.append(f'{dn}/')
+    for fn in sorted(files[dn]):
+      result.append(f'{dn}/{fn}')
+  return result
+
+def _package(root: Path, files: list[str], dst: Path):
+  with NamedTemporaryFile(delete = False) as listfile:
+    listname = listfile.name
+    for fn in files:
+      listfile.write(f'{fn}\n'.encode())
+
+  tar = Popen([
+    'bsdtar', '-c',
+    '-C', root,
+    '-T', listname, '-n',
+    '--numeric-owner',
+  ], stdout = PIPE)
   zstd = Popen([
     'zstd', '-f',
-    '--zstd=strat=5,wlog=27,hlog=25,slog=6',
+    '--zstd=strat=5,wlog=27,hlog=25,slog=6,ovlog=9',
     '-o', dst,
   ], stdin = tar.stdout)
   tar.stdout.close()
@@ -52,15 +93,63 @@ def _package(root: Path | str, src: Path | str, dst: Path):
   if tar.returncode != 0 or zstd.returncode != 0:
     raise Exception('bsdtar | zstd failed')
 
+  os.unlink(listname)
+
 def package_cross(paths: ProjectPaths):
-  _package(paths.x_prefix.parent, paths.x_prefix.name, paths.x_pkg)
+  files = [
+    *_sort_tarball(paths.layer_dir.parent, paths.layer_AAA.prefix),
+    *_sort_tarball(paths.layer_dir.parent, paths.layer_AAB.prefix),
+    *_sort_tarball(paths.layer_dir.parent, paths.layer_AAC('x86_64').prefix),
+    *_sort_tarball(paths.layer_dir.parent, paths.layer_AAC('aarch64').prefix),
+  ]
 
-def package_linux(paths: ProjectPaths):
-  _package(paths.linux_prefix('x86_64').parent, paths.linux_prefix('x86_64').name, paths.linux_pkg('x86_64'))
-  _package(paths.linux_prefix('aarch64').parent, paths.linux_prefix('aarch64').name, paths.linux_pkg('aarch64'))
+  _package(paths.layer_dir.parent, files, paths.cross_pkg)
 
-def package_mingw(paths: ProjectPaths):
-  _package(paths.mingw_prefix.parent, paths.mingw_prefix.name, paths.mingw_pkg)
+def package_layers(pkg_dir: Path, layers: list[Path], dst: Path):
+  files = []
+  file_to_package_map: map[str, str] = {}
+  for layer in layers:
+    sorted_part = _sort_tarball(layer, layer)
+    files.extend(map(
+      lambda fn: f'{pkg_dir.name}/{fn}',
+      sorted_part
+    ))
+
+    # check file collisions
+    for fn in sorted_part:
+      if fn.endswith('/'):
+        continue
+      if fn in file_to_package_map:
+        raise Exception(f'file collision: {fn} in {layer.name} and {file_to_package_map[fn]}')
+      file_to_package_map[fn] = layer.name
+
+  ensure(pkg_dir)
+  with overlayfs_ro(pkg_dir, layers):
+    _package(pkg_dir.parent, files, dst)
+
+def package_xmake(paths: ProjectPaths):
+  layers = [
+    paths.layer_ABB.xmake,
+  ]
+
+  package_layers(paths.xmake_pkg_dir, layers, paths.xmake_pkg)
+
+def package_linux(arch: str, paths: ProjectPaths):
+  layer_ABC = paths.layer_ABC(arch)
+  layer_ACC = paths.layer_ACC(arch)
+  layers = [
+    layer_ABC.binutils,
+    layer_ABC.gcc,
+    layer_ABC.glibc,
+    layer_ABC.gdb,
+    layer_ABC.linux,
+
+    layer_ACC.gdb,
+
+    paths.layer_ABB.make,
+  ]
+
+  package_layers(paths.linux_pkg_dir(arch), layers, paths.linux_pkg(arch))
 
 def main():
   config = parse_args()
@@ -84,17 +173,9 @@ def main():
 
   prepare_source(ver, paths)
 
-  # glibc prior to 2.31 can not be built with make 4.4 (infinite recursion)
-  # upstream accidentally fixed it, cherry-pick seems very hard
-  # the workaround is to build everything with make at that time
-  # ref. https://github.com/crosstool-ng/crosstool-ng/issues/1932#issuecomment-1528139734
-  if not config.no_cross:
-    build_AAA_make(ver, paths, config)
-
-  os.environ['PATH'] = f'{paths.x_prefix}/bin:{os.environ["PATH"]}'
   if not config.no_cross:
     build_AAA_library(ver, paths, config)
-    build_AAA_python(ver, paths, config)
+    build_AAA_tool(ver, paths, config)
     build_AAC_compiler('x86_64', ver, paths, config)
     build_AAC_library('x86_64', ver, paths, config)
     build_AAC_compiler('aarch64', ver, paths, config)
@@ -103,13 +184,16 @@ def main():
     build_AAB_library(ver, paths, config)
     package_cross(paths)
 
+  build_ABB_tool(ver, paths, config)
+  package_xmake(paths)
+
   build_ABC_toolchain('x86_64', ver, paths, config)
-  create_ABC_alias('x86_64', ver, paths, config)
-  build_ACC_gdbserver('x86_64', ver, paths, config)
+  build_ACC_tool('x86_64', ver, paths, config)
+  package_linux('x86_64', paths)
+
   build_ABC_toolchain('aarch64', ver, paths, config)
-  create_ABC_alias('aarch64', ver, paths, config)
-  build_ACC_gdbserver('aarch64', ver, paths, config)
-  package_linux(paths)
+  build_ACC_tool('aarch64', ver, paths, config)
+  package_linux('aarch64', paths)
 
 if __name__ == '__main__':
   main()

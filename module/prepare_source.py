@@ -5,188 +5,164 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from module.fetch import validate_and_download, check_and_extract
+from module.fetch import validate_and_download, check_and_extract, patch, patch_done
 from module.path import ProjectPaths
 from module.profile import BranchProfile
 
-def _patch(path: Path, patch: Path):
-  res = subprocess.run([
-    'patch',
-    '-Np1',
-    '-i', patch,
-  ], cwd = path)
-  if res.returncode != 0:
-    message = 'Patch fail: applying %s to %s' % (patch.name, path.name)
-    logging.critical(message)
-    raise Exception(message)
-
 def _autoreconf(path: Path):
-  res = subprocess.run([
-    'autoreconf',
-    '-fi',
-  ], cwd = path)
-  if res.returncode != 0:
-    message = 'Autoreconf fail: %s' % path.name
-    logging.critical(message)
-    raise Exception(message)
+  subprocess.run(
+    ['autoreconf', '-fi'],
+    cwd = path,
+    check = True,
+  )
 
 def _automake(path: Path):
-  res = subprocess.run([
-    'automake',
-  ], cwd = path)
-  if res.returncode != 0:
-    message = 'Automake fail: %s' % path.name
-    logging.critical(message)
-    raise Exception(message)
-
-def _patch_done(path: Path):
-  mark = path / '.patched'
-  mark.touch()
+  subprocess.run(
+    ['automake'],
+    cwd = path,
+    check = True,
+  )
 
 def _binutils(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/binutils/{paths.binutils_arx.name}'
-  validate_and_download(paths.binutils_arx, url)
-  if check_and_extract(paths.binutils, paths.binutils_arx):
+  url = f'https://ftpmirror.gnu.org/gnu/binutils/{paths.src_arx.binutils.name}'
+  validate_and_download(paths.src_arx.binutils, url)
+  if check_and_extract(paths.src_dir.binutils, paths.src_arx.binutils):
     v = Version(ver.binutils)
 
     # Backport
     if v == Version('2.37'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'backport_2.37.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'backport_2.37.patch')
     elif v == Version('2.33.1'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'backport_2.33.1.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'backport_2.33.1.patch')
     elif v == Version('2.27'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'backport_2.27.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'backport_2.27.patch')
 
     # Fix path corruption
     if v >= Version('2.43'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'fix-path-corruption_2.43.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-path-corruption_2.43.patch')
     elif v >= Version('2.41'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'fix-path-corruption_2.41.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-path-corruption_2.41.patch')
     elif v >= Version('2.39'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'fix-path-corruption_2.39.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-path-corruption_2.39.patch')
 
     # Fix elf compress alignment
     if Version('2.26') <= v < Version('2.32'):
       if v >= Version('2.30'):
-        _patch(paths.binutils, paths.patch / 'binutils' / 'fix-elf-compress-alignment_2.30.patch')
+        patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.30.patch')
       elif v >= Version('2.29'):
-        _patch(paths.binutils, paths.patch / 'binutils' / 'fix-elf-compress-alignment_2.29.patch')
+        patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.29.patch')
       else:
-        _patch(paths.binutils, paths.patch / 'binutils' / 'fix-elf-compress-alignment_2.26.patch')
+        patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.26.patch')
 
     # Always enable sysroot
     if v < Version('2.26'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'always-enable-sysroot.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'always-enable-sysroot.patch')
 
     # Fix musl locale name
     if v < Version('2.29.1'):
-      _patch(paths.binutils, paths.patch / 'binutils' / 'fix-musl-locale-name.patch')
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-musl-locale-name.patch')
 
-    _patch_done(paths.binutils)
+    patch_done(paths.src_dir.binutils)
 
 def _gcc(ver: BranchProfile, paths: ProjectPaths):
   v = Version(ver.gcc)
   if v.major >= 15:
-    url = f'https://gcc.gnu.org/pub/gcc/snapshots/{ver.gcc}/{paths.gcc_arx.name}'
+    url = f'https://gcc.gnu.org/pub/gcc/snapshots/{ver.gcc}/{paths.src_arx.gcc.name}'
   else:
-    url = f'https://ftpmirror.gnu.org/gnu/gcc/gcc-{ver.gcc}/{paths.gcc_arx.name}'
-  validate_and_download(paths.gcc_arx, url)
-  if check_and_extract(paths.gcc, paths.gcc_arx):
+    url = f'https://ftpmirror.gnu.org/gnu/gcc/gcc-{ver.gcc}/{paths.src_arx.gcc.name}'
+  validate_and_download(paths.src_arx.gcc, url)
+  if check_and_extract(paths.src_dir.gcc, paths.src_arx.gcc):
     # Backport
     if v.major == 11:
       # - poisoned calloc when building with musl
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_11.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_11.patch')
     elif v.major == 10:
       # - mingw define standard PRI macros when building against musl
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_10.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_10.patch')
     elif v.major == 9:
       # - mingw define standard PRI macros when building against musl
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_9.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_9.patch')
     elif v.major == 8:
       # - gcc fails to find cc1plus if built against ucrt due to a behaviour of `_access`
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_8.patch')
     elif v.major == 7:
       # - someone declared `bool error_p = NULL`, it works until musl 1.2 defines NULL to nullptr
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_7.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_7.patch')
     elif v.major == 6:
       # - someone declared `bool error_p = NULL`, it works until musl 1.2 defines NULL to nullptr
       # - intl adds `-liconv` without proper libdir
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_6.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_6.patch')
     elif v.major == 5:
       # - someone declared `bool error_p = NULL`, it works until musl 1.2 defines NULL to nullptr
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport_5.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_5.patch')
 
     # Fix failure due to language standard evolve
     if v.major >= 6:
       pass
     elif v >= Version('4.9'):
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-lang-std_4.9.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-lang-std_4.9.patch')
     else:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-lang-std_4.8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-lang-std_4.8.patch')
 
     # Backport `--with-glibc-version``
     if v == Version('4.8.5'):
-      _patch(paths.gcc, paths.patch / 'gcc' / 'backport-with-glibc-version_4.8.5.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport-with-glibc-version_4.8.5.patch')
 
     # Fix libc -> libgcc -> libc dependency
     if v.major >= 9:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-libc-libgcc-libc-dep_9.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_9.patch')
     elif v.major >= 8:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-libc-libgcc-libc-dep_8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_8.patch')
     else:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-libc-libgcc-libc-dep_4.8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_4.8.patch')
 
     # Fix make variable
     # - gcc 12 use `override CFLAGS +=` to handle PGO build, which breaks workaround for ucrt `access`
     if v.major >= 14:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-make-variable_14.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-make-variable_14.patch')
     elif v.major >= 12:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-make-variable_12.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-make-variable_12.patch')
 
     # Fix libatomic build
     if v >= Version('4.8') and v.major < 10:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-libatomic-build.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libatomic-build.patch')
 
     # Fix sanitizer dependency of crypt
     if v.major == 13:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-sanitizer-dep.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-sanitizer-dep.patch')
 
     # Fix VT sequence
     if v.major >= 12:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-vt-seq_12.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-vt-seq_12.patch')
     elif v.major >= 8:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-vt-seq_8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-vt-seq_8.patch')
 
     # Fix locale directory
     if v.major >= 12:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-localedir_12.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-localedir_12.patch')
     else:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-localedir_4.8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-localedir_4.8.patch')
 
     # Fix libcpp setlocale
     # libcpp defines `setlocale` if `HAVE_SETLOCALE` not defined, but its configure.ac does not check `setlocale` at all
-    _patch(paths.gcc, paths.patch / 'gcc' / 'fix-libcpp-setlocale.patch')
+    patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libcpp-setlocale.patch')
 
     # Parser-friendly diagnostics
-    po_dir = paths.gcc / 'gcc' / 'po'
+    po_dir = paths.src_dir.gcc / 'gcc' / 'po'
     po_files = list(po_dir.glob('*.po'))
-    res = subprocess.run([
+    subprocess.run([
       'sed',
-      '-iE',
+      '-i', '-E',
       '/^msgid "(error|warning): "/,+1 d',
       *po_files
-    ])
-    if res.returncode != 0:
-      message = 'Patch fail: applying gcc parser-friendly diagnostics'
-      logging.critical(message)
-      raise Exception(message)
+    ], check = True)
 
     # Fix console code page
     if v.major >= 13:
-      _patch(paths.gcc, paths.patch / 'gcc' / 'fix-console-cp.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-console-cp.patch')
 
     # x86_64 use `lib` instead of `lib64`
-    filepath = paths.gcc / 'gcc' / 'config' / 'i386' / 't-linux64'
+    filepath = paths.src_dir.gcc / 'gcc' / 'config' / 'i386' / 't-linux64'
     content = open(filepath).readlines()
     with open(filepath, 'w') as f:
       for line in content:
@@ -196,7 +172,7 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
           f.write(line)
 
     # aarch64 use `lib` instead of `lib64`
-    filepath = paths.gcc / 'gcc' / 'config' / 'aarch64' / 't-aarch64-linux'
+    filepath = paths.src_dir.gcc / 'gcc' / 'config' / 'aarch64' / 't-aarch64-linux'
     content = open(filepath).readlines()
     with open(filepath, 'w') as f:
       for line in content:
@@ -205,140 +181,158 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
         else:
           f.write(line)
 
-    _patch_done(paths.gcc)
+    patch_done(paths.src_dir.gcc)
 
 def _gdb(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/gdb/{paths.gdb_arx.name}'
-  validate_and_download(paths.gdb_arx, url)
-  if check_and_extract(paths.gdb, paths.gdb_arx):
+  url = f'https://ftpmirror.gnu.org/gnu/gdb/{paths.src_arx.gdb.name}'
+  validate_and_download(paths.src_arx.gdb, url)
+  if check_and_extract(paths.src_dir.gdb, paths.src_arx.gdb):
     v = Version(ver.gdb)
 
     # Backport
     if v.major == 10:
-      _patch(paths.gdb, paths.patch / 'gdb' / 'backport_10.patch')
+      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport_10.patch')
     elif v == Version('8.3.1'):
-      _patch(paths.gdb, paths.patch / 'gdb' / 'backport_8.3.1.patch')
+      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport_8.3.1.patch')
     elif v == Version('7.8.2'):
-      _patch(paths.gdb, paths.patch / 'gdb' / 'backport-stub-termcap_7.8.2.patch')
+      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport-stub-termcap_7.8.2.patch')
     elif v == Version('7.6.2'):
-      _patch(paths.gdb, paths.patch / 'gdb' / 'backport-stub-termcap_7.6.2.patch')
+      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport-stub-termcap_7.6.2.patch')
 
     # Fix iconv 'CP65001'
-    _patch(paths.gdb, paths.patch / 'gdb' / 'fix-iconv-cp65001.patch')
+    patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'fix-iconv-cp65001.patch')
 
     # Fix pythondir
     if ver.python:
-      _patch(paths.gdb, paths.patch / 'gdb' / 'fix-pythondir.patch')
+      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'fix-pythondir.patch')
 
-    _patch_done(paths.gdb)
+    patch_done(paths.src_dir.gdb)
 
 def _gettext(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/gettext/{paths.gettext_arx.name}'
-  validate_and_download(paths.gettext_arx, url)
-  check_and_extract(paths.gettext, paths.gettext_arx)
-  _patch_done(paths.gettext)
+  url = f'https://ftpmirror.gnu.org/gnu/gettext/{paths.src_arx.gettext.name}'
+  validate_and_download(paths.src_arx.gettext, url)
+  check_and_extract(paths.src_dir.gettext, paths.src_arx.gettext)
+  patch_done(paths.src_dir.gettext)
 
 def _glibc(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/glibc/{paths.glibc_arx.name}'
-  validate_and_download(paths.glibc_arx, url)
-  if check_and_extract(paths.glibc, paths.glibc_arx):
+  url = f'https://ftpmirror.gnu.org/gnu/glibc/{paths.src_arx.glibc.name}'
+  validate_and_download(paths.src_arx.glibc, url)
+  if check_and_extract(paths.src_dir.glibc, paths.src_arx.glibc):
     v = Version(ver.glibc)
 
     # Fix make 4.x
     # glibc locks autoconf version, here we patch configure instead of autoreconf
     # we do not use make 3.x because it's not easy to build on modern systems
     if v == Version('2.18'):
-      _patch(paths.glibc, paths.patch / 'glibc' / 'fix-make-4.x_2.18.patch')
+      patch(paths.src_dir.glibc, paths.patch_dir / 'glibc' / 'fix-make-4.x_2.18.patch')
 
     # Disable sunrpc
     # glibc wrongly implements host tool `rpcgen` as glibc-only
     # since they finally removed it, we disable it for old versions
     if v < Version('2.26'):
-      _patch(paths.glibc, paths.patch / 'glibc' / 'disable-sunrpc.patch')
+      patch(paths.src_dir.glibc, paths.patch_dir / 'glibc' / 'disable-sunrpc.patch')
 
-    _patch_done(paths.glibc)
+    patch_done(paths.src_dir.glibc)
 
 def _gmp(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/gmp/{paths.gmp_arx.name}'
-  validate_and_download(paths.gmp_arx, url)
-  check_and_extract(paths.gmp, paths.gmp_arx)
-  _patch_done(paths.gmp)
+  url = f'https://ftpmirror.gnu.org/gnu/gmp/{paths.src_arx.gmp.name}'
+  validate_and_download(paths.src_arx.gmp, url)
+  check_and_extract(paths.src_dir.gmp, paths.src_arx.gmp)
+  patch_done(paths.src_dir.gmp)
 
 def _iconv(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/libiconv/{paths.iconv_arx.name}'
-  validate_and_download(paths.iconv_arx, url)
-  check_and_extract(paths.iconv, paths.iconv_arx)
-  _patch_done(paths.iconv)
+  url = f'https://ftpmirror.gnu.org/gnu/libiconv/{paths.src_arx.iconv.name}'
+  validate_and_download(paths.src_arx.iconv, url)
+  check_and_extract(paths.src_dir.iconv, paths.src_arx.iconv)
+  patch_done(paths.src_dir.iconv)
 
 def _kernel(ver: BranchProfile, paths: ProjectPaths):
-  v = Version(ver.kernel)
-  url = f'https://cdn.kernel.org/pub/linux/kernel/v{v.major}.x/{paths.kernel_arx.name}'
-  validate_and_download(paths.kernel_arx, url)
-  if check_and_extract(paths.kernel, paths.kernel_arx):
+  v = Version(ver.linux)
+  url = f'https://cdn.kernel.org/pub/linux/kernel/v{v.major}.x/{paths.src_arx.linux.name}'
+  validate_and_download(paths.src_arx.linux, url)
+  if check_and_extract(paths.src_dir.linux, paths.src_arx.linux):
     # Fix x86 reloc redefinition
     if v < Version('3.18'):
-      _patch(paths.kernel, paths.patch / 'linux' / 'fix-x86-reloc-redefinition.patch')
+      patch(paths.src_dir.linux, paths.patch_dir / 'linux' / 'fix-x86-reloc-redefinition.patch')
 
-    _patch_done(paths.kernel)
+    patch_done(paths.src_dir.linux)
 
 def _make(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/make/{paths.make_arx.name}'
-  validate_and_download(paths.make_arx, url)
-  if check_and_extract(paths.make, paths.make_arx):
+  url = f'https://ftpmirror.gnu.org/gnu/make/{paths.src_arx.make.name}'
+  validate_and_download(paths.src_arx.make, url)
+  if check_and_extract(paths.src_dir.make, paths.src_arx.make):
     v = Version(ver.make)
 
     # Backport
     if v == Version('4.3'):
-      _patch(paths.make, paths.patch / 'make' / 'backport_4.3.patch')
+      patch(paths.src_dir.make, paths.patch_dir / 'make' / 'backport_4.3.patch')
 
     # Fix fcntl declaration
     if v == Version('4.3'):
-      _patch(paths.make, paths.patch / 'make' / 'fix-fcntl-decl.patch')
+      patch(paths.src_dir.make, paths.patch_dir / 'make' / 'fix-fcntl-decl.patch')
 
-    _patch_done(paths.make)
+    patch_done(paths.src_dir.make)
 
 def _mingw(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/{paths.mingw_arx.name}'
-  validate_and_download(paths.mingw_arx, url)
-  check_and_extract(paths.mingw, paths.mingw_arx)
-  _patch_done(paths.mingw)
+  url = f'https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/{paths.src_arx.mingw.name}'
+  validate_and_download(paths.src_arx.mingw, url)
+  check_and_extract(paths.src_dir.mingw, paths.src_arx.mingw)
+  patch_done(paths.src_dir.mingw)
 
 def _mpc(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/mpc/{paths.mpc_arx.name}'
-  validate_and_download(paths.mpc_arx, url)
-  check_and_extract(paths.mpc, paths.mpc_arx)
-  _patch_done(paths.mpc)
+  url = f'https://ftpmirror.gnu.org/gnu/mpc/{paths.src_arx.mpc.name}'
+  validate_and_download(paths.src_arx.mpc, url)
+  check_and_extract(paths.src_dir.mpc, paths.src_arx.mpc)
+  patch_done(paths.src_dir.mpc)
 
 def _mpfr(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/mpfr/{paths.mpfr_arx.name}'
-  validate_and_download(paths.mpfr_arx, url)
-  check_and_extract(paths.mpfr, paths.mpfr_arx)
-  _patch_done(paths.mpfr)
+  url = f'https://ftpmirror.gnu.org/gnu/mpfr/{paths.src_arx.mpfr.name}'
+  validate_and_download(paths.src_arx.mpfr, url)
+  check_and_extract(paths.src_dir.mpfr, paths.src_arx.mpfr)
+  patch_done(paths.src_dir.mpfr)
 
 def _python(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://www.python.org/ftp/python/{ver.python}/{paths.python_arx.name}'
-  z_url = f'https://zlib.net/fossils/{paths.python_z_arx.name}'
-  validate_and_download(paths.python_arx, url)
-  validate_and_download(paths.python_z_arx, z_url)
-  if check_and_extract(paths.python, paths.python_arx):
+  url = f'https://www.python.org/ftp/python/{ver.python}/{paths.src_arx.python.name}'
+  validate_and_download(paths.src_arx.python, url)
+  if check_and_extract(paths.src_dir.python, paths.src_arx.python):
     ver = Version(ver.python)
 
-    # Disable xxlimited shared library if `--disable-test-modules`
-    if ver >= Version('3.12') and ver < Version('3.13'):
-      _patch(paths.python, paths.patch / 'python' / 'disable-shared-xxlimited_3.12.patch')
-
     # Alternative build system
-    check_and_extract(paths.python_z, paths.python_z_arx)
-    os.symlink(paths.python_z, paths.python / 'zlib', target_is_directory = True)
+    os.symlink(paths.src_dir.z, paths.src_dir.python / 'zlib', target_is_directory = True)
     if ver >= Version('3.13'):
-      shutil.copy(paths.patch / 'python' / 'xmake_3.13.lua', paths.python / 'xmake.lua')
-      _patch(paths.python, paths.patch / 'python' / 'fix-mingw-build_3.13.patch')
+      shutil.copy(paths.patch_dir / 'python' / 'xmake_3.13.lua', paths.src_dir.python / 'xmake.lua')
+      patch(paths.src_dir.python, paths.patch_dir / 'python' / 'fix-mingw-build_3.13.patch')
     else:
-      shutil.copy(paths.patch / 'python' / 'xmake_3.12.lua', paths.python / 'xmake.lua')
-      _patch(paths.python, paths.patch / 'python' / 'fix-mingw-build_3.12.patch')
-    shutil.copy(paths.patch / 'python' / 'python-config.sh', paths.python / 'python-config.sh')
+      shutil.copy(paths.patch_dir / 'python' / 'xmake_3.12.lua', paths.src_dir.python / 'xmake.lua')
+      patch(paths.src_dir.python, paths.patch_dir / 'python' / 'fix-mingw-build_3.12.patch')
+    shutil.copy(paths.patch_dir / 'python' / 'python-config.sh', paths.src_dir.python / 'python-config.sh')
 
-    _patch_done(paths.python)
+    patch_done(paths.src_dir.python)
+
+def _xmake(ver: BranchProfile, paths: ProjectPaths):
+  release_name = paths.src_arx.xmake.name.replace('xmake-', 'xmake-v')
+  url = f'https://github.com/xmake-io/xmake/releases/download/v{ver.xmake}/{release_name}'
+  validate_and_download(paths.src_arx.xmake, url)
+
+  if check_and_extract(paths.src_dir.xmake, paths.src_arx.xmake):
+    # disable werror
+    xmake_lua = paths.src_dir.xmake / 'core/xmake.lua'
+    with open(xmake_lua, 'r') as f:
+      xmake_lua_content = f.readlines()
+    with open(xmake_lua, 'w') as f:
+      for line in xmake_lua_content:
+        if line.startswith('set_warnings'):
+          f.write('set_warnings("all")\n')
+        else:
+          f.write(line)
+
+    patch_done(paths.src_dir.xmake)
+
+def _z(ver: BranchProfile, paths: ProjectPaths):
+  url = f'https://github.com/madler/zlib/releases/download/v{ver.z}/{paths.src_arx.z.name}'
+  validate_and_download(paths.src_arx.z, url)
+  check_and_extract(paths.src_dir.z, paths.src_arx.z)
+  patch_done(paths.src_dir.z)
 
 def prepare_source(ver: BranchProfile, paths: ProjectPaths):
   _binutils(ver, paths)
@@ -356,3 +350,5 @@ def prepare_source(ver: BranchProfile, paths: ProjectPaths):
   _mpfr(ver, paths)
   if ver.python:
     _python(ver, paths)
+  _xmake(ver, paths)
+  _z(ver, paths)
