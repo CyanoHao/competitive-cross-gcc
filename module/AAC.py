@@ -72,6 +72,9 @@ def _gcc(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argparse.Na
   else:
     limits_h = libexec_target / f'{ver.gcc}/include-fixed/limits.h'
 
+  if v.major >= 6:
+    config_flags.append('--enable-default-pie')
+
   with overlayfs_ro('/usr/local', [
     paths.layer_AAA.gmp / 'usr/local',
     paths.layer_AAA.mpc / 'usr/local',

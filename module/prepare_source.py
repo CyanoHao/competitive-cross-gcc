@@ -141,6 +141,12 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
     elif v.major >= 8:
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-vt-seq_8.patch')
 
+    # Fix c++tools PIE
+    if v.major >= 14:
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-c++tools-pie_14.patch')
+    elif v.major >= 11:
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-c++tools-pie_11.patch')
+
     # Fix libcpp setlocale
     # libcpp defines `setlocale` if `HAVE_SETLOCALE` not defined, but its configure.ac does not check `setlocale` at all
     patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libcpp-setlocale.patch')
