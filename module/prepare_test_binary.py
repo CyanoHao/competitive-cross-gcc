@@ -22,10 +22,6 @@ def _gcc_linux(arch: str, ver: BranchProfile, paths: ProjectPaths):
   check_and_extract(paths.test_linux(arch), paths.linux_pkg(arch))
   (paths.test_linux(arch) / '.patched').touch()
 
-def _gcc_mingw(ver: BranchProfile, paths: ProjectPaths):
-  check_and_extract(paths.test_mingw, paths.mingw_pkg)
-  (paths.test_mingw / '.patched').touch()
-
 def _xmake(ver: BranchProfile, paths: ProjectPaths):
   url = f'https://github.com/xmake-io/xmake/releases/download/v{ver.xmake}/{paths.xmake_arx.name}'
   validate_and_download(paths.xmake_arx, url)
@@ -39,8 +35,5 @@ def prepare_test_binary(ver: BranchProfile, paths: ProjectPaths, config: argpars
   _gcc_linux('x86_64', ver, paths)
 
   _gcc_linux('aarch64', ver, paths)
-
-  if not config.no_mingw:
-    _gcc_mingw(ver, paths)
 
   _xmake(ver, paths)

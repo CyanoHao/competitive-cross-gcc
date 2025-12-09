@@ -21,7 +21,6 @@ from module.profile import BRANCHES
 from module.AAA import build_AAA_make, build_AAA_library, build_AAA_python
 from module.AAB import build_AAB_compiler, build_AAB_library
 from module.AAC import build_AAC_compiler, build_AAC_library
-from module.ABB import build_ABB_toolchain
 from module.ABC import build_ABC_toolchain, create_ABC_alias
 from module.ACC import build_ACC_gdbserver
 
@@ -34,8 +33,6 @@ def clean(config: argparse.Namespace, paths: ProjectPaths):
     shutil.rmtree(paths.linux_prefix('x86_64'))
   if paths.linux_prefix('aarch64').exists():
     shutil.rmtree(paths.linux_prefix('aarch64'))
-  if not config.no_mingw and paths.mingw_prefix.exists():
-    shutil.rmtree(paths.mingw_prefix)
 
 def prepare_dirs(paths: ProjectPaths):
   paths.assets.mkdir(parents = True, exist_ok = True)
@@ -113,10 +110,6 @@ def main():
   create_ABC_alias('aarch64', ver, paths, config)
   build_ACC_gdbserver('aarch64', ver, paths, config)
   package_linux(paths)
-
-  if not config.no_mingw:
-    build_ABB_toolchain(ver, paths, config)
-    package_mingw(paths)
 
 if __name__ == '__main__':
   main()

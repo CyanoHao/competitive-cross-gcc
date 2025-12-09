@@ -51,11 +51,6 @@ def parse_args() -> argparse.Namespace:
     help = 'Do not build cross toolchain',
   )
   parser.add_argument(
-    '-nm', '--no-mingw',
-    action = 'store_true',
-    help = 'Do not build mingw toolchain',
-  )
-  parser.add_argument(
     '-v', '--verbose',
     action = 'count',
     default = 0,

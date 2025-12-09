@@ -118,73 +118,6 @@ def test_linux_make_gdb(arch: str, paths: ProjectPaths):
     if line not in gdb_output:
       raise Exception(f"expected output line '{line}' not found in gdb output:\n{gdb_output}")
 
-def test_mingw_compiler(paths: ProjectPaths, verbose: list[str]):
-  subprocess.check_call([
-    paths.xmake_exe, 'f', *verbose,
-    '-p', 'mingw', '-a', 'x86_64',
-    f'--mingw={winepath(paths.test_mingw)}',
-  ], cwd = paths.test)
-  subprocess.check_call([paths.xmake_exe, 'b', *verbose], cwd = paths.test)
-  subprocess.check_call([paths.xmake_exe, 'test', *verbose], cwd = paths.test)
-
-def test_mingw_make_gdb(paths: ProjectPaths):
-  bin_dir = paths.test_mingw / 'bin'
-  make_exe = bin_dir / 'mingw32-make.exe'
-  gdb_exe = bin_dir / 'gdb.exe'
-  gdbserver_exe = bin_dir / 'gdbserver.exe'
-
-  build_dir = paths.test / 'build' / 'mingw' / 'x86_64' / 'debug'
-  inferior = build_dir / 'breakpoint.exe'
-  in_gdb_inferior = winepath(inferior).replace('\\', '/')
-  ensure(build_dir)
-
-  # make
-  os.environ['WINEPATH'] = winepath(bin_dir)
-  subprocess.check_call([make_exe, f'DIR={build_dir}', 'SUFFIX=.exe'], cwd = paths.test)
-  del os.environ['WINEPATH']
-
-  # gdb
-  port = available_port()
-  comm = f'localhost:{port}'
-
-  gdb_command = (
-    f'file {in_gdb_inferior}\n'  # old releases disconnect when retriving symbol from gdbserver
-    f'target remote {comm}\n'
-    'b 12\n'
-    'c\n'
-    'p fib[i]\n'  # i = 2, fib[i] = 1
-    'c\n'
-    'p fib[i]\n'  # i = 3, fib[i] = 2
-    'c\n'
-    'p fib[i]\n'  # i = 4, fib[i] = 3
-    'c\n'
-    'p fib[i]\n'  # i = 5, fib[i] = 5
-    'c\n'
-  ).encode()
-
-  expected_output = [
-    '$1 = 1',
-    '$2 = 2',
-    '$3 = 3',
-    '$4 = 5',
-  ]
-
-  gdbserver = subprocess.Popen([gdbserver_exe, comm, winepath(inferior)], cwd = paths.test)
-  gdb = subprocess.Popen([gdb_exe], cwd = paths.test, stdin = PIPE, stdout = PIPE)
-  gdb.stdin.write(gdb_command)
-  gdb.stdin.close()
-  gdb.wait(timeout = 10.0)
-  if gdb.returncode != 0:
-    raise Exception(f"gdb exited with code {gdb.returncode}")
-  gdbserver.wait(timeout = 1.0)
-  if gdbserver.returncode != 0:
-    raise Exception(f"gdbserver exited with code {gdbserver.returncode}")
-
-  gdb_output = gdb.stdout.read().decode()
-  for line in expected_output:
-    if line not in gdb_output:
-      raise Exception(f"expected output line '{line}' not found in gdb output:\n{gdb_output}")
-
 def main():
   config = parse_args()
 
@@ -240,20 +173,6 @@ def main():
   except Exception as e:
     test_report['fail'] = True
     test_report['linux-aarch64-make-gdb'] = repr(e)
-
-  if not config.no_mingw:
-    try:
-      test_mingw_compiler(paths, xmake_verbose)
-      test_report['mingw64-compiler'] = "okay"
-    except Exception as e:
-      test_report['fail'] = True
-      test_report['mingw64-compiler'] = repr(e)
-    try:
-      test_mingw_make_gdb(paths)
-      test_report['mingw64-make-gdb'] = "okay"
-    except Exception as e:
-      test_report['fail'] = True
-      test_report['mingw64-make-gdb'] = repr(e)
 
   print("============================== TEST REPORT ==============================")
   pprint(test_report)
