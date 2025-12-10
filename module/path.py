@@ -9,7 +9,6 @@ class SourcePaths(NamedTuple):
   binutils: Path
   gcc: Path
   gdb: Path
-  gettext: Optional[Path]
   glibc: Path
   gmp: Path
   iconv: Path
@@ -21,6 +20,9 @@ class SourcePaths(NamedTuple):
   python: Optional[Path]
   xmake: Path
   z: Path
+
+class InTreeSourcePaths(NamedTuple):
+  intl: Path
 
 class LayerPathsAAA(NamedTuple):
   prefix: Path
@@ -42,9 +44,9 @@ class LayerPathsAAB(NamedTuple):
   gcc: Path
   headers: Path
 
-  gettext: Path
   gmp: Path
   iconv: Path
+  intl: Path
   mpc: Path
   mpfr: Path
   python: Path
@@ -94,6 +96,7 @@ class ProjectPaths:
 
   # build phase
 
+  utf8_src_dir: Path
   build_dir: Path
   layer_dir: Path
   linux_pkg_dir: Callable[[str], Path]
@@ -101,6 +104,9 @@ class ProjectPaths:
 
   src_dir: SourcePaths
   src_arx: SourcePaths
+
+  in_tree_src_dir: InTreeSourcePaths
+  in_tree_src_tree: InTreeSourcePaths
 
   layer_AAA: LayerPathsAAA
   layer_AAB: LayerPathsAAB
@@ -142,6 +148,7 @@ class ProjectPaths:
 
     # build phase
 
+    self.utf8_src_dir = self.root_dir / 'support/utf8'
     self.build_dir = Path(f'/tmp/build/gcc-{config.branch}')
     self.layer_dir = Path(f'/tmp/layer/gcc-{config.branch}')
     self.linux_pkg_dir = lambda arch: Path(f'/tmp/pkg/gcc-{GLIBC_LD_NAME_MAP[arch]}-{config.branch}')
@@ -151,7 +158,6 @@ class ProjectPaths:
       binutils = f'binutils-{ver.binutils}',
       gcc = f'gcc-{ver.gcc}',
       gdb = f'gdb-{ver.gdb}',
-      gettext = f'gettext-{ver.gettext}' if ver.gettext else None,
       glibc = f'glibc-{ver.glibc}',
       gmp = f'gmp-{ver.gmp}',
       iconv = f'libiconv-{ver.iconv}',
@@ -169,7 +175,6 @@ class ProjectPaths:
       binutils = self.build_dir / src_name.binutils,
       gcc = self.build_dir / src_name.gcc,
       gdb = self.build_dir / src_name.gdb,
-      gettext = self.build_dir / src_name.gettext if src_name.gettext else None,
       glibc = self.build_dir / src_name.glibc,
       gmp = self.build_dir / src_name.gmp,
       iconv = self.build_dir / src_name.iconv,
@@ -189,7 +194,6 @@ class ProjectPaths:
         else self.assets_dir / f'{src_name.binutils}.tar.xz'
           if Version(ver.binutils) >= Version('2.28.1')
           else self.assets_dir / f'{src_name.binutils}.tar.bz2',
-      gettext = self.assets_dir / f'{src_name.gettext}.tar.xz' if src_name.gettext else None,
       gcc = self.assets_dir / f'{src_name.gcc}.tar.xz'
         if Version(ver.gcc).major >= 5
         else self.assets_dir / f'{src_name.gcc}.tar.bz2',
@@ -211,6 +215,14 @@ class ProjectPaths:
       python = self.assets_dir / f'{src_name.python}.tar.xz' if src_name.python else None,
       xmake = self.assets_dir / f'{src_name.xmake}.tar.gz',
       z = self.assets_dir / f'{src_name.z}.tar.xz',
+    )
+
+    self.in_tree_src_dir = InTreeSourcePaths(
+      intl = self.build_dir / 'intl',
+    )
+
+    self.in_tree_src_tree = InTreeSourcePaths(
+      intl = self.root_dir / 'support/intl',
     )
 
     layer_AAA_prefix = self.layer_dir / 'AAA'
@@ -236,9 +248,9 @@ class ProjectPaths:
       gcc = layer_AAB_prefix / 'gcc',
       headers = layer_AAB_prefix / 'headers',
 
-      gettext = layer_AAB_prefix / 'gettext',
       gmp = layer_AAB_prefix / 'gmp',
       iconv = layer_AAB_prefix / 'iconv',
+      intl = layer_AAB_prefix / 'intl',
       mpc = layer_AAB_prefix / 'mpc',
       mpfr = layer_AAB_prefix / 'mpfr',
       python = layer_AAB_prefix / 'python',

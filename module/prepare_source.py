@@ -46,13 +46,14 @@ def _binutils(ver: BranchProfile, paths: ProjectPaths):
       patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-path-corruption_2.39.patch')
 
     # Fix elf compress alignment
-    if Version('2.26') <= v < Version('2.32'):
-      if v >= Version('2.30'):
-        patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.30.patch')
-      elif v >= Version('2.29'):
-        patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.29.patch')
-      else:
-        patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.26.patch')
+    if v >= Version('2.32'):
+      pass
+    elif v >= Version('2.30'):
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.30.patch')
+    elif v >= Version('2.29'):
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.29.patch')
+    elif v >= Version('2.26'):
+      patch(paths.src_dir.binutils, paths.patch_dir / 'binutils' / 'fix-elf-compress-alignment_2.26.patch')
 
     # Always enable sysroot
     if v < Version('2.26'):
@@ -90,23 +91,20 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_7.patch')
     elif v.major == 6:
       # - someone declared `bool error_p = NULL`, it works until musl 1.2 defines NULL to nullptr
-      # - intl adds `-liconv` without proper libdir
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_6.patch')
     elif v.major == 5:
       # - someone declared `bool error_p = NULL`, it works until musl 1.2 defines NULL to nullptr
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport_5.patch')
 
-    # Fix failure due to language standard evolve
-    if v.major >= 6:
-      pass
-    elif v >= Version('4.9'):
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-lang-std_4.9.patch')
-    else:
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-lang-std_4.8.patch')
+    # Disable default utf8 manifest
+    # We patch the CRT init objects, so GCC's manifest should be disabled.
+    # But we want no `--disable-win32-utf8-manifest` in configure flags to avoid confusion.
+    if v.major >= 13:
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'disable-default-utf8-manifest.patch')
 
-    # Backport `--with-glibc-version``
-    if v == Version('4.8.5'):
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'backport-with-glibc-version_4.8.5.patch')
+    # Fix failure due to language standard evolve
+    if v.major < 6:
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-lang-std.patch')
 
     # Fix libc -> libgcc -> libc dependency
     if v.major >= 9:
@@ -114,7 +112,7 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
     elif v.major >= 8:
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_8.patch')
     else:
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_4.8.patch')
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_5.patch')
 
     # Fix make variable
     # - gcc 12 use `override CFLAGS +=` to handle PGO build, which breaks workaround for ucrt `access`
@@ -124,7 +122,7 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-make-variable_12.patch')
 
     # Fix libatomic build
-    if v >= Version('4.8') and v.major < 10:
+    if v.major < 10:
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libatomic-build.patch')
 
     # Fix sanitizer dependency of crypt
@@ -136,12 +134,6 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-vt-seq_12.patch')
     elif v.major >= 8:
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-vt-seq_8.patch')
-
-    # Fix locale directory
-    if v.major >= 12:
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-localedir_12.patch')
-    else:
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-localedir_4.8.patch')
 
     # Fix libcpp setlocale
     # libcpp defines `setlocale` if `HAVE_SETLOCALE` not defined, but its configure.ac does not check `setlocale` at all
@@ -156,10 +148,6 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
       '/^msgid "(error|warning): "/,+1 d',
       *po_files
     ], check = True)
-
-    # Fix console code page
-    if v.major >= 13:
-      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-console-cp.patch')
 
     # x86_64 use `lib` instead of `lib64`
     filepath = paths.src_dir.gcc / 'gcc' / 'config' / 'i386' / 't-linux64'
@@ -194,10 +182,6 @@ def _gdb(ver: BranchProfile, paths: ProjectPaths):
       patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport_10.patch')
     elif v == Version('8.3.1'):
       patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport_8.3.1.patch')
-    elif v == Version('7.8.2'):
-      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport-stub-termcap_7.8.2.patch')
-    elif v == Version('7.6.2'):
-      patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'backport-stub-termcap_7.6.2.patch')
 
     # Fix iconv 'CP65001'
     patch(paths.src_dir.gdb, paths.patch_dir / 'gdb' / 'fix-iconv-cp65001.patch')
@@ -208,23 +192,11 @@ def _gdb(ver: BranchProfile, paths: ProjectPaths):
 
     patch_done(paths.src_dir.gdb)
 
-def _gettext(ver: BranchProfile, paths: ProjectPaths):
-  url = f'https://ftpmirror.gnu.org/gnu/gettext/{paths.src_arx.gettext.name}'
-  validate_and_download(paths.src_arx.gettext, url)
-  check_and_extract(paths.src_dir.gettext, paths.src_arx.gettext)
-  patch_done(paths.src_dir.gettext)
-
 def _glibc(ver: BranchProfile, paths: ProjectPaths):
   url = f'https://ftpmirror.gnu.org/gnu/glibc/{paths.src_arx.glibc.name}'
   validate_and_download(paths.src_arx.glibc, url)
   if check_and_extract(paths.src_dir.glibc, paths.src_arx.glibc):
     v = Version(ver.glibc)
-
-    # Fix make 4.x
-    # glibc locks autoconf version, here we patch configure instead of autoreconf
-    # we do not use make 3.x because it's not easy to build on modern systems
-    if v == Version('2.18'):
-      patch(paths.src_dir.glibc, paths.patch_dir / 'glibc' / 'fix-make-4.x_2.18.patch')
 
     # Disable sunrpc
     # glibc wrongly implements host tool `rpcgen` as glibc-only
@@ -246,16 +218,27 @@ def _iconv(ver: BranchProfile, paths: ProjectPaths):
   check_and_extract(paths.src_dir.iconv, paths.src_arx.iconv)
   patch_done(paths.src_dir.iconv)
 
+def _intl(ver: BranchProfile, paths: ProjectPaths):
+  shutil.copytree(
+    paths.in_tree_src_tree.intl,
+    paths.in_tree_src_dir.intl,
+    ignore = shutil.ignore_patterns(
+      '.cache',
+      '.vscode',
+      '.xmake',
+      'build',
+      'pkg',
+      '*.mo',
+    ),
+    dirs_exist_ok = True,
+  )
+
 def _linux(ver: BranchProfile, paths: ProjectPaths):
   v = Version(ver.linux)
   url = f'https://cdn.kernel.org/pub/linux/kernel/v{v.major}.x/{paths.src_arx.linux.name}'
   validate_and_download(paths.src_arx.linux, url)
-  if check_and_extract(paths.src_dir.linux, paths.src_arx.linux):
-    # Fix x86 reloc redefinition
-    if v < Version('3.18'):
-      patch(paths.src_dir.linux, paths.patch_dir / 'linux' / 'fix-x86-reloc-redefinition.patch')
-
-    patch_done(paths.src_dir.linux)
+  check_and_extract(paths.src_dir.linux, paths.src_arx.linux)
+  patch_done(paths.src_dir.linux)
 
 def _make(ver: BranchProfile, paths: ProjectPaths):
   url = f'https://ftpmirror.gnu.org/gnu/make/{paths.src_arx.make.name}'
@@ -276,8 +259,30 @@ def _make(ver: BranchProfile, paths: ProjectPaths):
 def _mingw(ver: BranchProfile, paths: ProjectPaths):
   url = f'https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/{paths.src_arx.mingw.name}'
   validate_and_download(paths.src_arx.mingw, url)
-  check_and_extract(paths.src_dir.mingw, paths.src_arx.mingw)
-  patch_done(paths.src_dir.mingw)
+  if check_and_extract(paths.src_dir.mingw, paths.src_arx.mingw):
+    v = Version(ver.mingw)
+
+    # CRT: hack console
+    # 1. Automatically set console code page to match ACP (especially UTF-8).
+    # 2. Set stdio to binary mode to workaround CRT's bugged "double translation".
+    #    a. UCRT randomly eats linefeeds when piping on Windows Vista.
+    #       Compiling any non-trivial program compiled with '-g3 -pipe'
+    #       is likely to fail.
+    #    b. MSVCRT, and UCRT prior to 10.0.14393, cannot write multi-byte
+    #       characters one-char-by-one-char after set_locale(LC_ALL, "").
+    #         int main()
+    #         {
+    #           setlocale(LC_ALL, "");
+    #           for (auto ch : "你好")
+    #             fputc(ch, stdout);
+    #         }
+    #       This is exactly how MinGW-w64's printf and toolchain's NLS work.
+    if v.major >= 6:
+      patch(paths.src_dir.mingw, paths.patch_dir / 'mingw' / 'hack-console_6.patch')
+    else:
+      patch(paths.src_dir.mingw, paths.patch_dir / 'mingw' / 'hack-console_4.patch')
+
+    patch_done(paths.src_dir.mingw)
 
 def _mpc(ver: BranchProfile, paths: ProjectPaths):
   url = f'https://ftpmirror.gnu.org/gnu/mpc/{paths.src_arx.mpc.name}'
@@ -338,11 +343,10 @@ def prepare_source(ver: BranchProfile, paths: ProjectPaths):
   _binutils(ver, paths)
   _gcc(ver, paths)
   _gdb(ver, paths)
-  if ver.gettext:
-    _gettext(ver, paths)
   _glibc(ver, paths)
   _gmp(ver, paths)
   _iconv(ver, paths)
+  _intl(ver, paths)
   _linux(ver, paths)
   _make(ver, paths)
   _mingw(ver, paths)

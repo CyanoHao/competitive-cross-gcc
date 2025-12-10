@@ -27,12 +27,15 @@ def _gmake(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
     paths.layer_AAB.crt / 'usr/local',
     paths.layer_AAB.gcc / 'usr/local',
     paths.layer_AAB.headers / 'usr/local',
+
+    paths.layer_AAB.intl / 'usr/local',
   ]):
     configure(build_dir, [
       '--prefix=',
       '--program-prefix=mingw32-',
       '--host=x86_64-w64-mingw32',
       f'--build={config.build}',
+      '--enable-nls',
       *cflags_B(c_extra = c_extra),
     ])
     make_default(build_dir, config.jobs)

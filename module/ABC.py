@@ -21,6 +21,8 @@ def _binutils(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argpar
     paths.layer_AAB.headers / 'usr/local',
     paths.layer_AAB.gcc / 'usr/local',
     paths.layer_AAB.crt / 'usr/local',
+
+    paths.layer_AAB.intl / 'usr/local',
   ]):
     configure(build_dir, [
       '--prefix=',
@@ -33,7 +35,7 @@ def _binutils(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argpar
       # features
       '--disable-install-libbfd',
       '--disable-multilib',
-      '--disable-nls',
+      '--enable-nls',
       *cflags_B(lto = False),
       'AR=x86_64-w64-mingw32-gcc-ar',
       'RANLIB=x86_64-w64-mingw32-gcc-ranlib',
@@ -182,6 +184,7 @@ def _gcc(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argparse.Na
     paths.layer_AAB.headers / 'usr/local',
 
     paths.layer_AAB.gmp / 'usr/local',
+    paths.layer_AAB.intl / 'usr/local',
     paths.layer_AAB.mpc / 'usr/local',
     paths.layer_AAB.mpfr / 'usr/local',
 

@@ -128,6 +128,7 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
   yield
 
 def _crt(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
+  v_gcc = Version(ver.gcc)
   build_dir = paths.src_dir.mingw / 'mingw-w64-crt' / 'build-AAB'
   ensure(build_dir)
 
@@ -153,6 +154,23 @@ def _crt(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
     ])
     make_default(build_dir, config.jobs)
     make_destdir_install(build_dir, paths.layer_AAB.crt)
+
+    # The future belongs to UTF-8.
+    # Piping is used so widely in GNU toolchain that we have to apply UTF-8 manifest to all programs.
+    subprocess.run([
+      'x86_64-w64-mingw32-windres',
+      '-O', 'coff',
+      paths.utf8_src_dir / 'utf8-manifest.rc',
+      '-o', build_dir / 'utf8-manifest.o',
+    ], check = True)
+    for crt_object in ['crt1.o', 'crt1u.o', 'crt2.o', 'crt2u.o']:
+      subprocess.run([
+        'x86_64-w64-mingw32-gcc' if v_gcc.major >= 9 else 'x86_64-w64-mingw32-ld',
+        '-r',
+        build_dir / 'lib64' / crt_object,
+        build_dir / 'utf8-manifest.o',
+        '-o', paths.layer_AAB.crt / 'usr/local/x86_64-w64-mingw32/lib' / crt_object,
+      ], check = True)
 
 def _winpthreads(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
   build_dir = paths.src_dir.mingw / 'mingw-w64-libraries' / 'winpthreads' / 'build-AAB'
@@ -310,28 +328,30 @@ def _iconv(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
     make_default(build_dir, config.jobs)
     make_destdir_install(build_dir, paths.layer_AAB.iconv)
 
-def _gettext(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
-  build_dir = paths.src_dir.gettext / 'gettext-runtime' / 'build-AAB'
-  ensure(build_dir)
-
+def _intl(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
   with overlayfs_ro('/usr/local', [
     paths.layer_AAB.binutils / 'usr/local',
     paths.layer_AAB.crt / 'usr/local',
     paths.layer_AAB.gcc / 'usr/local',
     paths.layer_AAB.headers / 'usr/local',
-
-    paths.layer_AAB.iconv / 'usr/local',
   ]):
-    configure(build_dir, [
-      '--prefix=/usr/local/x86_64-w64-mingw32',
-      '--host=x86_64-w64-mingw32',
-      f'--build={config.build}',
-      '--enable-static',
-      '--disable-shared',
-      *cflags_B(),
+    v_gcc = Version(ver.gcc)
+    src_dir = paths.in_tree_src_dir.intl
+
+    config_flags = []
+
+    if v_gcc.major < 6:
+      config_flags.append('--nested-ns=n')
+
+    xmake_config(src_dir, [
+      '--plat=mingw',
+      '--arch=x86_64',
+      *config_flags,
     ])
-    make_default(build_dir, config.jobs)
-    make_destdir_install(build_dir, paths.layer_AAB.gettext)
+    xmake_build(src_dir, config.jobs)
+
+    install_dir = paths.layer_AAB.intl / 'usr/local/x86_64-w64-mingw32'
+    xmake_install(src_dir, install_dir)
 
 def _python(ver: BranchProfile, paths: ProjectPaths, config: argparse.Namespace):
   v_gcc = Version(ver.gcc)
@@ -391,10 +411,7 @@ def build_AAB_library(ver: BranchProfile, paths: ProjectPaths, config: argparse.
 
   _iconv(ver, paths, config)
 
-  if ver.gettext:
-    _gettext(ver, paths, config)
-  else:
-    ensure(paths.layer_AAB.gettext / 'usr/local')
+  _intl(ver, paths, config)
 
   if ver.python:
     _python(ver, paths, config)
