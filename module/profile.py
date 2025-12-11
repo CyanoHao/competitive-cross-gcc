@@ -2,7 +2,7 @@ from typing import Callable, Optional
 
 class BranchProfile:
   gcc: str
-  rev: str
+  rev: str = '20251212'
 
   binutils: str
   gdb: str
@@ -26,7 +26,6 @@ class BranchProfile:
     self,
 
     gcc: str,
-    rev: str,
 
     binutils: str,
     gdb: str,
@@ -45,7 +44,6 @@ class BranchProfile:
     win32_winnt: int,
   ):
     self.gcc = gcc
-    self.rev = rev
 
     self.binutils = binutils
     self.gdb = gdb
@@ -66,7 +64,6 @@ class BranchProfile:
 BRANCHES: dict[str, BranchProfile] = {
   '16': BranchProfile(
     gcc = '16-20251207',
-    rev = '0',
 
     binutils = '2.45.1',
     gdb = '16.3',
@@ -86,7 +83,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '15': BranchProfile(
     gcc = '15.2.0',
-    rev = '0',
 
     binutils = '2.45.1',
     gdb = '16.3',
@@ -106,7 +102,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '14': BranchProfile(
     gcc = '14.3.0',
-    rev = '0',
 
     # freeze: 2025-01-01
     binutils = '2.43.1',
@@ -127,7 +122,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '13': BranchProfile(
     gcc = '13.4.0',
-    rev = '0',
 
     # freeze: 2024-01-01
     binutils = '2.41',
@@ -148,7 +142,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '12': BranchProfile(
     gcc = '12.5.0',
-    rev = '0',
 
     # freeze: 2023-01-01
     binutils = '2.39',
@@ -169,7 +162,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '11': BranchProfile(
     gcc = '11.5.0',
-    rev = '0',
 
     # freeze: 2022-01-01
     binutils = '2.37',
@@ -190,7 +182,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '10': BranchProfile(
     gcc = '10.5.0',
-    rev = '0',
 
     # freeze: 2021-01-01
     binutils = '2.35.2',
@@ -211,7 +202,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '9': BranchProfile(
     gcc = '9.5.0',
-    rev = '0',
 
     # freeze: 2020-01-01
     binutils = '2.33.1',
@@ -232,7 +222,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '8': BranchProfile(
     gcc = '8.5.0',
-    rev = '0',
 
     # freeze: 2019-01-01
     binutils = '2.31.1',
@@ -253,7 +242,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '7': BranchProfile(
     gcc = '7.5.0',
-    rev = '0',
 
     # freeze: 2018-01-01
     binutils = '2.29.1',
@@ -274,7 +262,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '6': BranchProfile(
     gcc = '6.5.0',
-    rev = '0',
 
     # freeze: 2017-01-01
     binutils = '2.27',
@@ -295,7 +282,6 @@ BRANCHES: dict[str, BranchProfile] = {
   ),
   '5': BranchProfile(
     gcc = '5.5.0',
-    rev = '0',
 
     # freeze: 2016-01-01
     binutils = '2.25.1',

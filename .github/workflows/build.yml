@@ -3,25 +3,71 @@ name: Build
 on: [push, pull_request]
 
 jobs:
+  param:
+    name: Determine parameter
+    runs-on: ubuntu-24.04
+    steps:
+      - id: param
+        run: |
+          python3 <<EOF >"$GITHUB_OUTPUT"
+          import json
+
+          branch = [
+            # C++20 era
+            '16',
+            # C++17 era
+            '15', '14', '13', '12', '11',
+            # C++14 era
+            '10', '9', '8', '7', '6',
+            # C++98 era
+            '5',
+          ]
+
+          ld_name = ['linux-x86-64', 'linux-aarch64']
+
+          if '${{ github.ref_type }}' == 'tag':
+            release = True
+          else:
+            release = False
+
+          print(f'branch={json.dumps(branch)}')
+          print(f'ld_name={json.dumps(ld_name)}')
+          print(f'release={json.dumps(release)}')
+          EOF
+
+    outputs:
+      branch: ${{ steps.param.outputs.branch }}
+      ld_name: ${{ steps.param.outputs.ld_name }}
+      release: ${{ steps.param.outputs.release }}
+
+  build_container:
+    name: Build Container
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build container
+        run: |
+          podman build -t competitive-cross-gcc/buildenv support/buildenv
+
+          mkdir assets
+          podman save competitive-cross-gcc/buildenv:latest | zstd -o assets/buildenv.tar.zst
+
+      - name: Upload container
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildenv
+          path: assets/buildenv.tar.zst
+
   build:
     name: Build
+    needs: [param, build_container]
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        branch: [
-          # C++20 era
-          '16',
-          # C++17 era
-          '15', '14', '13', '12', '11',
-          # C++14 era
-          '10', '9', '8', '7', '6',
-          # C++98 era
-          '5',
-        ]
-        include:
-          - prerelease: false
-          - { branch: '16', prerelease: true }
+        branch: ${{ fromJson(needs.param.outputs.branch) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,30 +81,74 @@ jobs:
         run: |
           echo ':DOSWin:M::MZ::/usr/bin/wine:' | sudo tee /proc/sys/fs/binfmt_misc/register
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: buildenv
+          path: assets
+
       - name: Build
-        if: github.ref_type != 'tag' || startsWith(github.ref_name, matrix.branch)
         run: |
-          podman build -t competitive-cross-gcc/buildenv support/buildenv
+          zstdcat assets/buildenv.tar.zst | podman load
           podman run --rm --cap-add=sys_admin -v $PWD:/mnt -w /mnt competitive-cross-gcc/buildenv \
             ./main.py --branch ${{ matrix.branch }}
 
       - name: Upload
         uses: actions/upload-artifact@v4
-        if: github.ref_type != 'tag' || startsWith(github.ref_name, matrix.branch)
         with:
-          name: GCC ${{ matrix.branch }}
+          name: gcc-${{ matrix.branch }}
           path: dist/
 
       - name: Test
-        if: github.ref_type != 'tag' || startsWith(github.ref_name, matrix.branch)
         run: |
           ./test.py --branch ${{ matrix.branch }} -v
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag' && startsWith(github.ref_name, matrix.branch)
+  release:
+    name: Release
+    needs: [param, build]
+    runs-on: ubuntu-24.04
+    if: ${{ fromJson(needs.param.outputs.release) }}
+
+    steps:
+      - uses: ConorMacBride/install-package@v1
         with:
-          prerelease: ${{ matrix.prerelease }}
-          make_latest: 'false'
+          apt: 7zip jq libarchive-tools
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gcc-*
+          path: dist
+          merge-multiple: true
+
+      - name: 7z archive
+        run: |
+          cd dist
+          jobs=$(nproc)
+
+          branche_list=(
+            $(echo '${{ needs.param.outputs.branch }}' | jq -r '.[]')
+          )
+          ld_name_list=(
+            $(echo '${{ needs.param.outputs.ld_name }}' | jq -r '.[]')
+          )
+
+          for branch in ${branche_list[@]} ; do
+            for ld_name in ${ld_name_list[@]} ; do
+              {
+                dn=gcc-${ld_name}-${branch}
+                fn=$(ls $dn-*.tar.zst)
+                bn=$(basename $fn .tar.zst)
+                bsdtar -xf $fn
+                7z a -t7z -mx9 -ms=on -m0=LZMA:d=64m:fb64 $bn.7z $dn
+                rm -rf $dn
+              } &
+              while [[ $(jobs -r -p | wc -l) -ge $jobs ]] ; do
+                sleep 1
+              done
+            done
+          done
+          wait
+
+      - uses: softprops/action-gh-release@v2
+        with:
           files: |
-            dist/*.tar.zst
+            dist/gcc-*.7z
