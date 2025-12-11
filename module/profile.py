@@ -20,7 +20,7 @@ class BranchProfile:
   enable_kernel: Callable[[str], str]
   win32_winnt: int
 
-  xmake: str = '2.9.8'
+  xmake: str = '3.0.5'
 
   def __init__(
     self,
@@ -64,28 +64,48 @@ class BranchProfile:
     self.win32_winnt = win32_winnt
 
 BRANCHES: dict[str, BranchProfile] = {
-  '15': BranchProfile(
-    gcc = '15-20250330',
+  '16': BranchProfile(
+    gcc = '16-20251207',
     rev = '0',
 
-    binutils = '2.44',
-    gdb = '16.2',
-    glibc = '2.41',
+    binutils = '2.45.1',
+    gdb = '16.3',
+    glibc = '2.42',
     gmp = '6.3.0',
     iconv = '1.17',
-    linux = '6.12.21',
+    linux = '6.18',
     make = '4.4.1',
-    mingw = '12.0.0',
+    mingw = '13.0.0',
     mpc = '1.3.1',
     mpfr = '4.2.1',
-    python = '3.13.2',
+    python = '3.14.2',
+    z = '1.3.1',
+
+    enable_kernel = lambda _: '4.4.0',
+    win32_winnt = 0x0A00,
+  ),
+  '15': BranchProfile(
+    gcc = '15.2.0',
+    rev = '0',
+
+    binutils = '2.45.1',
+    gdb = '16.3',
+    glibc = '2.42',
+    gmp = '6.3.0',
+    iconv = '1.17',
+    linux = '6.18',
+    make = '4.4.1',
+    mingw = '13.0.0',
+    mpc = '1.3.1',
+    mpfr = '4.2.1',
+    python = '3.14.2',
     z = '1.3.1',
 
     enable_kernel = lambda _: '4.4.0',
     win32_winnt = 0x0A00,
   ),
   '14': BranchProfile(
-    gcc = '14.2.0',
+    gcc = '14.3.0',
     rev = '0',
 
     # freeze: 2025-01-01
@@ -94,19 +114,19 @@ BRANCHES: dict[str, BranchProfile] = {
     glibc = '2.40',
     gmp = '6.3.0',
     iconv = '1.17',
-    linux = '6.12.21',
+    linux = '6.12.61',
     make = '4.4.1',
     mingw = '12.0.0',
     mpc = '1.3.1',
     mpfr = '4.2.1',
-    python = '3.13.2',
+    python = '3.13.11',
     z = '1.3.1',
 
     enable_kernel = lambda _: '4.4.0',
     win32_winnt = 0x0A00,
   ),
   '13': BranchProfile(
-    gcc = '13.3.0',
+    gcc = '13.4.0',
     rev = '0',
 
     # freeze: 2024-01-01
@@ -115,19 +135,19 @@ BRANCHES: dict[str, BranchProfile] = {
     glibc = '2.38',
     gmp = '6.3.0',
     iconv = '1.17',
-    linux = '6.6.85',
+    linux = '6.6.119',
     make = '4.4.1',
     mingw = '11.0.1',
     mpc = '1.3.1',
     mpfr = '4.2.1',
-    python = '3.12.9',
+    python = '3.12.12',
     z = '1.3.1',
 
     enable_kernel = lambda _: '4.4.0',
     win32_winnt = 0x0A00,
   ),
   '12': BranchProfile(
-    gcc = '12.4.0',
+    gcc = '12.5.0',
     rev = '0',
 
     # freeze: 2023-01-01
@@ -136,7 +156,7 @@ BRANCHES: dict[str, BranchProfile] = {
     glibc = '2.36',
     gmp = '6.2.1',
     iconv = '1.17',
-    linux = '6.1.132',
+    linux = '6.1.159',
     make = '4.4.1',
     mingw = '10.0.0',
     mpc = '1.3.1',
@@ -157,7 +177,7 @@ BRANCHES: dict[str, BranchProfile] = {
     glibc = '2.34',
     gmp = '6.2.1',
     iconv = '1.16',
-    linux = '5.15.179',
+    linux = '5.15.197',
     make = '4.3',
     mingw = '9.0.0',
     mpc = '1.2.1',
@@ -178,7 +198,7 @@ BRANCHES: dict[str, BranchProfile] = {
     glibc = '2.32',
     gmp = '6.2.1',
     iconv = '1.16',
-    linux = '5.10.235',
+    linux = '5.10.247',
     make = '4.3',
     mingw = '8.0.3',
     mpc = '1.2.1',
@@ -199,7 +219,7 @@ BRANCHES: dict[str, BranchProfile] = {
     glibc = '2.30',
     gmp = '6.1.2',
     iconv = '1.16',
-    linux = '5.4.291',
+    linux = '5.4.302',
     make = '4.2.1',
     mingw = '7.0.0',
     mpc = '1.1.0',

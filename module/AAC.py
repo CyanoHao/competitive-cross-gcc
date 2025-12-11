@@ -93,6 +93,7 @@ def _gcc(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argparse.Na
       '--enable-checking=release',
       '--enable-host-pie',
       '--enable-languages=c,c++',
+      '--disable-libatomic',
       '--disable-libgomp',
       '--disable-libmpx',
       '--disable-libsanitizer',
