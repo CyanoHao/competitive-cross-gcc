@@ -2,6 +2,7 @@ import logging
 import os
 from packaging.version import Version
 from pathlib import Path
+import re
 import shutil
 import subprocess
 
@@ -67,10 +68,13 @@ def _binutils(ver: BranchProfile, paths: ProjectPaths):
 
 def _gcc(ver: BranchProfile, paths: ProjectPaths):
   v = Version(ver.gcc)
-  if v.major >= 15:
+
+  is_snapshot = re.search(r'-\d{8}$', ver.gcc)
+  if is_snapshot:
     url = f'https://gcc.gnu.org/pub/gcc/snapshots/{ver.gcc}/{paths.src_arx.gcc.name}'
   else:
     url = f'https://ftpmirror.gnu.org/gnu/gcc/gcc-{ver.gcc}/{paths.src_arx.gcc.name}'
+
   validate_and_download(paths.src_arx.gcc, url)
   if check_and_extract(paths.src_dir.gcc, paths.src_arx.gcc):
     # Backport
@@ -107,7 +111,9 @@ def _gcc(ver: BranchProfile, paths: ProjectPaths):
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-lang-std.patch')
 
     # Fix libc -> libgcc -> libc dependency
-    if v.major >= 9:
+    if v.major >= 16:
+      patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_16.patch')
+    elif v.major >= 9:
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_9.patch')
     elif v.major >= 8:
       patch(paths.src_dir.gcc, paths.patch_dir / 'gcc' / 'fix-libc-libgcc-libc-dep_8.patch')
@@ -302,9 +308,16 @@ def _python(ver: BranchProfile, paths: ProjectPaths):
   if check_and_extract(paths.src_dir.python, paths.src_arx.python):
     ver = Version(ver.python)
 
+    # Fix static build
+    if ver >= Version('3.14'):
+      patch(paths.src_dir.python, paths.patch_dir / 'python' / 'fix-static-build.patch')
+
     # Alternative build system
     os.symlink(paths.src_dir.z, paths.src_dir.python / 'zlib', target_is_directory = True)
-    if ver >= Version('3.13'):
+    if ver >= Version('3.14'):
+      shutil.copy(paths.patch_dir / 'python' / 'xmake_3.14.lua', paths.src_dir.python / 'xmake.lua')
+      patch(paths.src_dir.python, paths.patch_dir / 'python' / 'fix-mingw-build_3.14.patch')
+    elif ver >= Version('3.13'):
       shutil.copy(paths.patch_dir / 'python' / 'xmake_3.13.lua', paths.src_dir.python / 'xmake.lua')
       patch(paths.src_dir.python, paths.patch_dir / 'python' / 'fix-mingw-build_3.13.patch')
     else:

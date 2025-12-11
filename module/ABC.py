@@ -243,7 +243,7 @@ def _gdb(arch: str, ver: BranchProfile, paths: ProjectPaths, config: argparse.Na
     python_flags.append(f'--with-python=/usr/local/x86_64-w64-mingw32/python-config.sh')
 
   # GCC 15 defaults to C23, in which `foo()` means `foo(void)` instead of `foo(...)`.
-  if v_gcc.major >= 15 and v < Version('16.3'):
+  if v_gcc.major >= 15 and v.major < 17:
     c_extra.append('-std=gnu11')
 
   with overlayfs_ro('/usr/local', [

@@ -10,6 +10,8 @@ jobs:
       fail-fast: false
       matrix:
         branch: [
+          # C++20 era
+          '16',
           # C++17 era
           '15', '14', '13', '12', '11',
           # C++14 era
@@ -19,9 +21,7 @@ jobs:
         ]
         include:
           - prerelease: false
-          - { branch: '15', prerelease: true }
-          - make_latest: false
-          - { branch: '14', make_latest: true }
+          - { branch: '16', prerelease: true }
 
     steps:
       - uses: actions/checkout@v4
@@ -59,6 +59,6 @@ jobs:
         if: github.ref_type == 'tag' && startsWith(github.ref_name, matrix.branch)
         with:
           prerelease: ${{ matrix.prerelease }}
-          make_latest: ${{ matrix.make_latest }}
+          make_latest: 'false'
           files: |
             dist/*.tar.zst
